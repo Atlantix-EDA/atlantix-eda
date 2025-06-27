@@ -3,7 +3,7 @@ extern crate clap;
 use clap::{Parser, ValueEnum};
 use std::fs;
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, ValueEnum, PartialEq)]
 enum OutputFormat {
     Altium,
     Kicad,
@@ -33,6 +33,14 @@ struct Args {
     /// KiCad target library directory (for --format kicad only)
     #[arg(long)]
     kicad_target_lib: Option<String>,
+    
+    /// Manufacturer (currently only Vishay is supported)
+    #[arg(long, default_value = "Vishay")]
+    manufacturer: String,
+    
+    /// Resistor symbol style (for --format kicad only)
+    #[arg(long, default_value = "european")]
+    symbol_style: String,
 }
 
 fn main() {
@@ -45,11 +53,25 @@ fn main() {
     let packages: Vec<&str> = args.packages.split(',').map(|s| s.trim()).collect();
     println!("Packages: {:?}", packages);
     
+    if args.manufacturer != "Vishay" {
+        eprintln!("Error: Currently only Vishay is supported as a manufacturer");
+        std::process::exit(1);
+    }
+    println!("Manufacturer: {}", args.manufacturer);
+    
+    if args.symbol_style != "european" && args.symbol_style != "american" {
+        eprintln!("Error: Symbol style must be 'european' or 'american'");
+        std::process::exit(1);
+    }
+    if args.format == OutputFormat::Kicad {
+        println!("Symbol style: {}", args.symbol_style);
+    }
+    
     let decades = vec![1, 10, 100, 1000, 10000, 100000];
     
     match args.format {
         OutputFormat::Altium => generate_altium_libraries(&packages, &args.output_dir, args.series, &decades),
-        OutputFormat::Kicad => generate_kicad_libraries(&packages, &args.output_dir, args.series, &decades, args.kicad_target_lib.as_deref()),
+        OutputFormat::Kicad => generate_kicad_libraries(&packages, &args.output_dir, args.series, &decades, args.kicad_target_lib.as_deref(), &args.symbol_style),
     }
 }
 
@@ -84,7 +106,7 @@ fn generate_altium_libraries(packages: &[&str], output_dir: &str, series: usize,
     println!("Import these CSV files into Altium Designer's Database Library.");
 }
 
-fn generate_kicad_libraries(packages: &[&str], output_dir: &str, series: usize, decades: &[u32], kicad_target_lib: Option<&str>) {
+fn generate_kicad_libraries(packages: &[&str], output_dir: &str, series: usize, decades: &[u32], kicad_target_lib: Option<&str>, symbol_style: &str) {
     println!("\nGenerating KiCad libraries...");
     
     let (symbols_dir, footprints_dir) = if let Some(root) = kicad_target_lib {
@@ -109,7 +131,7 @@ fn generate_kicad_libraries(packages: &[&str], output_dir: &str, series: usize, 
         let mut resistor = component::Resistor::new(series, package.to_string());
         let symbol_file = format!("{}/Atlantix_R_{}.kicad_sym", symbols_dir, package);
         
-        match resistor.generate_kicad_symbols(decades.to_vec(), &symbol_file) {
+        match resistor.generate_kicad_symbols(decades.to_vec(), &symbol_file, symbol_style) {
             Ok(()) => println!("Successfully generated {}", symbol_file),
             Err(e) => eprintln!("Error generating symbols for {}: {}", package, e),
         }
