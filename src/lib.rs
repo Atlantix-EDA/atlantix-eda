@@ -2,8 +2,15 @@
 //!
 
 extern crate num_traits;
+extern crate chrono;
+
+pub mod kicad_symbol;
+pub mod kicad_footprint;
 
 use self::num_traits::Pow;
+use crate::kicad_symbol::{KicadSymbol, KicadSymbolLib};
+use crate::kicad_footprint::KicadFootprint;
+use std::fs;
 
 ///
 /// Resistor type data structure
@@ -279,5 +286,132 @@ impl Resistor {
         return alpha.to_string();
     }
 
+    /// Generate KiCad symbol library file
+    pub fn generate_kicad_symbols(&mut self, decades: Vec<u32>, output_path: &str) -> Result<(), std::io::Error> {
+        let mut symbol_lib = KicadSymbolLib::new();
+        
+        for decade in decades {
+            for index in 0..self.series {
+                self.update_value_for_decade(index, decade);
+                
+                // Use same naming convention as Altium: R0603_1.33K
+                let symbol_name = format!("R{}_{}", self.case, self.value);
+                
+                // Use same detailed description as Altium: "RES SMT 1.18Kohms, 0603, 1%, 1/8W"
+                let tolerance = self.get_tolerance_from_series(self.series);
+                let power_rating = self.get_power_rating_from_package(&self.case);
+                let description = format!("RES SMT {}ohms, {}, {}, {}", 
+                    self.format_resistance_for_description(&self.value),
+                    self.case, 
+                    tolerance,
+                    power_rating
+                );
+                
+                let footprint_name = format!("Atlantix_Resistors:R_{}_{}", 
+                    self.get_imperial_name(&self.case),
+                    self.get_metric_name(&self.case)
+                );
+                
+                let mut symbol = KicadSymbol::new(symbol_name, self.value.clone(), footprint_name);
+                symbol.description = description;
+                symbol_lib.add_symbol(symbol);
+            }
+        }
+        
+        let lib_content = symbol_lib.generate_library();
+        fs::write(output_path, lib_content)?;
+        Ok(())
+    }
 
+    /// Generate KiCad footprint files
+    pub fn generate_kicad_footprints(&self, packages: Vec<&str>, output_dir: &str) -> Result<(), std::io::Error> {
+        fs::create_dir_all(output_dir)?;
+        
+        for package in packages {
+            if let Some(footprint) = KicadFootprint::new_smd_resistor(package) {
+                let filename = format!("{}/{}.kicad_mod", output_dir, footprint.name);
+                let footprint_content = footprint.generate_footprint();
+                fs::write(filename, footprint_content)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn update_value_for_decade(&mut self, index: usize, decade: u32) {
+        match decade {
+            1 => self.value = format!("{:.2}", self.series_array[index]),
+            10 => self.value = format!("{:2.1}", (decade as f64) * self.series_array[index]),
+            100 => self.value = format!("{:3.0}", (decade as f64) * self.series_array[index]),
+            1000 => self.value = format!("{:.2}K", self.series_array[index]),
+            10000 => self.value = format!("{:2.1}K", (10 as f64) * self.series_array[index]),
+            100000 => self.value = format!("{:3.0}K", (100 as f64) * self.series_array[index]),
+            _ => (),
+        }
+    }
+
+    fn get_imperial_name<'a>(&self, package: &'a str) -> &'a str {
+        match package {
+            "0201" => "0201",
+            "0402" => "0402", 
+            "0603" => "0603",
+            "0805" => "0805",
+            "1206" => "1206",
+            "1210" => "1210",
+            "2010" => "2010",
+            "2512" => "2512",
+            _ => package,
+        }
+    }
+
+    fn get_metric_name(&self, package: &str) -> &'static str {
+        match package {
+            "0201" => "0603Metric",
+            "0402" => "1005Metric",
+            "0603" => "1608Metric", 
+            "0805" => "2012Metric",
+            "1206" => "3216Metric",
+            "1210" => "3225Metric",
+            "2010" => "5025Metric",
+            "2512" => "6332Metric",
+            _ => "UnknownMetric",
+        }
+    }
+
+    fn format_resistance_for_description(&self, value: &str) -> String {
+        if value.contains("K") {
+            // Convert "1.33K" to "1.33K"
+            value.to_string()
+        } else {
+            // Convert "1.33" to "1.33"
+            value.to_string()
+        }
+    }
+
+    fn get_tolerance_from_series(&self, series: usize) -> &'static str {
+        match series {
+            192 => "0.5%",  // E192 series
+            96 => "1%",     // E96 series  
+            48 => "2%",     // E48 series
+            24 => "5%",     // E24 series
+            12 => "10%",    // E12 series
+            6 => "20%",     // E6 series
+            3 => "50%",     // E3 series (rarely used)
+            _ => "1%",      // Default to 1% for unknown series
+        }
+    }
+
+    fn get_power_rating_from_package(&self, package: &str) -> &'static str {
+        match package {
+            "0201" => "1/20W",
+            "0402" => "1/16W", 
+            "0603" => "1/10W",
+            "0805" => "1/8W",
+            "1206" => "1/4W",
+            "1210" => "1/2W",
+            "1218" => "1W",
+            "2010" => "3/4W",
+            "2512" => "1W",
+            _ => "1/10W",   // Default
+        }
+    }
 }

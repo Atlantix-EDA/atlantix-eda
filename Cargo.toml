@@ -8,8 +8,14 @@ repository = "https://github.com/saturn77/atlantix-eda.git"
 [dependencies]
 num-traits = "0.2.14"
 fs_extra = "1.2.0"
+chrono = "0.4"
+clap = { version = "4.0", features = ["derive"] }
 
 
 [lib]
 name = "component"
+
+[[bin]]
+name = "gen_resistor"
+path = "examples/gen_resistor.rs"
 
