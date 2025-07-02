@@ -2,8 +2,18 @@
 //!
 
 extern crate num_traits;
+extern crate chrono;
+extern crate bevy_ecs;
+
+pub mod kicad_symbol;
+pub mod kicad_footprint;
+pub mod ecs;
+pub mod gui;
 
 use self::num_traits::Pow;
+use crate::kicad_symbol::{KicadSymbol, KicadSymbolLib};
+use crate::kicad_footprint::KicadFootprint;
+use std::fs;
 
 ///
 /// Resistor type data structure
@@ -120,23 +130,13 @@ impl Resistor {
             series_array: alpha,
         }
     }
-    ///  Impl Function : set_vishay_num
+    ///  Impl Function : set_digikey_pn  
     ///  #  Remarks
     ///
-    /// This will assign a Manufacturer or Vendor number to the self.manuf field.
+    /// This will assign a Digikey distributor part number to the self.manuf field.
     /// This is true for all decades other than decade 1, which has special exception.
     ///
-    /// ```
-    /// pub fn set_vishay_num(&mut self) -> String {
-    ///		match self.case {
-    /// 		0402 => self.manuf = format!("541-%sLCT-ND",self.series_array[index]);
-    ///			0603 => self.manuf = format!("541-%sHCT-ND",self.series_array[index]);
-    ///			0805 => self.manuf = format!("541-%sCCT-ND",self.series_array[index])
-    ///			}
-    /// }
-    ///
-    /// ```
-    pub fn set_vishay_num(&mut self, index: usize, decade: u32) {
+    pub fn set_digikey_pn(&mut self, index: usize, decade: u32) {
         if decade == 1 {
             match self.case.as_str() {
                 "0402" => self.manuf = format!("541-{}LLCT-ND", self.series_array[index]),
@@ -162,6 +162,78 @@ impl Resistor {
             _ => self.manuf = format!("541-{}XXX-ND", self.value),
         }
     }
+    }
+
+    ///  Impl Function : set_vishay_mpn
+    ///  #  Remarks
+    ///
+    /// Generate actual Vishay manufacturer part numbers (CRCW series)
+    /// Format: CRCW[package][resistance][tolerance][TCR]
+    /// Example: CRCW06031K05FKEA
+    ///
+    pub fn generate_vishay_mpn(&self) -> String {
+        // Convert package to Vishay format
+        let package_code = match self.case.as_str() {
+            "0402" => "0402",
+            "0603" => "0603", 
+            "0805" => "0805",
+            "1206" => "1206",
+            "1210" => "1210",
+            "2010" => "2010",
+            "2512" => "2512",
+            _ => "0603", // default
+        };
+        
+        // Convert resistance value to Vishay format
+        let resistance_code = self.format_vishay_resistance(&self.value);
+        
+        // F = 1% tolerance, K = 100ppm/°C TCR, E = AEC-Q200 qualified, A = packaging
+        let suffix = "FKEA";
+        
+        format!("CRCW{}{}{}", package_code, resistance_code, suffix)
+    }
+
+    fn format_vishay_resistance(&self, value: &str) -> String {
+        if value.contains("K") {
+            // Convert "1.05K" to "1K05"
+            let numeric_part = value.replace("K", "");
+            if let Ok(num) = numeric_part.parse::<f64>() {
+                if num >= 10.0 {
+                    format!("{}K0", num as i32)
+                } else if num >= 1.0 {
+                    let int_part = num as i32;
+                    let frac_part = ((num - int_part as f64) * 100.0).round() as i32;
+                    if frac_part == 0 {
+                        format!("{}K00", int_part)
+                    } else {
+                        format!("{}K{:02}", int_part, frac_part)
+                    }
+                } else {
+                    format!("R{:03}", (num * 1000.0) as i32)
+                }
+            } else {
+                "1K00".to_string()
+            }
+        } else {
+            // Convert ohm values like "1.05" to "1R05" 
+            if let Ok(num) = value.parse::<f64>() {
+                if num >= 100.0 {
+                    format!("{:.0}R", num)
+                } else if num >= 10.0 {
+                    format!("{:.0}R0", num)
+                } else {
+                    let int_part = num as i32;
+                    let frac_part = ((num - int_part as f64) * 100.0).round() as i32;
+                    if frac_part == 0 {
+                        format!("{}R00", int_part)
+                    } else {
+                        format!("{}R{:02}", int_part, frac_part)
+                    }
+                }
+            } else {
+                "1R00".to_string()
+            }
+        }
     }
 
     ///  Impl Resistor : set_name
@@ -244,29 +316,29 @@ impl Resistor {
             match decade {
                 1 => {
                     self.value = format!("{:.2}", self.series_array[index]);
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 10 => {
                     self.value = format!("{:2.1}", (decade as f64) * self.series_array[index]);
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 100 => {
                     self.value = format!("{:3.0}", (decade as f64) * self.series_array[index]);
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 1000 => {
                     self.value = format!("{:.2}", self.series_array[index]) + &"K".to_string();
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 10000 => {
                     self.value = format!("{:2.1}", (10 as f64) * self.series_array[index])
                         + &"K".to_string();
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 100000 => {
                     self.value = format!("{:3.0}", (100 as f64) * self.series_array[index])
                         + &"K".to_string();
-                    self.set_vishay_num(index, decade)
+                    self.set_digikey_pn(index, decade)
                 }
                 _ => (),
             }
@@ -279,5 +351,142 @@ impl Resistor {
         return alpha.to_string();
     }
 
+    /// Generate KiCad symbol library file
+    pub fn generate_kicad_symbols(&mut self, decades: Vec<u32>, output_path: &str, symbol_style: &str) -> Result<(), std::io::Error> {
+        let mut symbol_lib = KicadSymbolLib::new();
+        
+        for decade in decades {
+            for index in 0..self.series {
+                self.update_value_for_decade(index, decade);
+                
+                // Use same naming convention as Altium: R0603_1.33K
+                let symbol_name = format!("R{}_{}", self.case, self.value);
+                
+                // Use same detailed description as Altium: "RES SMT 1.18Kohms, 0603, 1%, 1/8W"
+                let tolerance = self.get_tolerance_from_series(self.series);
+                let power_rating = self.get_power_rating_from_package(&self.case);
+                let description = format!("RES SMT {}ohms, {}, {}, {}", 
+                    self.format_resistance_for_description(&self.value),
+                    self.case, 
+                    tolerance,
+                    power_rating
+                );
+                
+                let footprint_name = format!("Atlantix_Resistors:R_{}_{}", 
+                    self.get_imperial_name(&self.case),
+                    self.get_metric_name(&self.case)
+                );
+                
+                // Generate Vishay manufacturer information
+                let vishay_mpn = self.generate_vishay_mpn();
+                self.set_digikey_pn(index, decade);
+                let digikey_pn = self.manuf.clone();
+                
+                let manufacturer = "Vishay".to_string();
+                let supplier = "Digikey".to_string();
+                let supplier_url = format!("https://www.digikey.com/products/en?keywords={}", digikey_pn);
+                
+                let mut symbol = KicadSymbol::new(symbol_name, self.value.clone(), footprint_name, symbol_style)
+                    .with_manufacturer_info(manufacturer, vishay_mpn, supplier, digikey_pn, supplier_url);
+                symbol.description = description;
+                symbol_lib.add_symbol(symbol);
+            }
+        }
+        
+        let lib_content = symbol_lib.generate_library();
+        fs::write(output_path, lib_content)?;
+        Ok(())
+    }
 
+    /// Generate KiCad footprint files
+    pub fn generate_kicad_footprints(&self, packages: Vec<&str>, output_dir: &str) -> Result<(), std::io::Error> {
+        fs::create_dir_all(output_dir)?;
+        
+        for package in packages {
+            if let Some(footprint) = KicadFootprint::new_smd_resistor(package) {
+                let filename = format!("{}/{}.kicad_mod", output_dir, footprint.name);
+                let footprint_content = footprint.generate_footprint();
+                fs::write(filename, footprint_content)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn update_value_for_decade(&mut self, index: usize, decade: u32) {
+        match decade {
+            1 => self.value = format!("{:.2}", self.series_array[index]),
+            10 => self.value = format!("{:2.1}", (decade as f64) * self.series_array[index]),
+            100 => self.value = format!("{:3.0}", (decade as f64) * self.series_array[index]),
+            1000 => self.value = format!("{:.2}K", self.series_array[index]),
+            10000 => self.value = format!("{:2.1}K", (10 as f64) * self.series_array[index]),
+            100000 => self.value = format!("{:3.0}K", (100 as f64) * self.series_array[index]),
+            _ => (),
+        }
+    }
+
+    fn get_imperial_name<'a>(&self, package: &'a str) -> &'a str {
+        match package {
+            "0201" => "0201",
+            "0402" => "0402", 
+            "0603" => "0603",
+            "0805" => "0805",
+            "1206" => "1206",
+            "1210" => "1210",
+            "2010" => "2010",
+            "2512" => "2512",
+            _ => package,
+        }
+    }
+
+    fn get_metric_name(&self, package: &str) -> &'static str {
+        match package {
+            "0201" => "0603Metric",
+            "0402" => "1005Metric",
+            "0603" => "1608Metric", 
+            "0805" => "2012Metric",
+            "1206" => "3216Metric",
+            "1210" => "3225Metric",
+            "2010" => "5025Metric",
+            "2512" => "6332Metric",
+            _ => "UnknownMetric",
+        }
+    }
+
+    fn format_resistance_for_description(&self, value: &str) -> String {
+        if value.contains("K") {
+            // Convert "1.33K" to "1.33K"
+            value.to_string()
+        } else {
+            // Convert "1.33" to "1.33"
+            value.to_string()
+        }
+    }
+
+    fn get_tolerance_from_series(&self, series: usize) -> &'static str {
+        match series {
+            192 => "0.5%",  // E192 series
+            96 => "1%",     // E96 series  
+            48 => "2%",     // E48 series
+            24 => "5%",     // E24 series
+            12 => "10%",    // E12 series
+            6 => "20%",     // E6 series
+            3 => "50%",     // E3 series (rarely used)
+            _ => "1%",      // Default to 1% for unknown series
+        }
+    }
+
+    fn get_power_rating_from_package(&self, package: &str) -> &'static str {
+        match package {
+            "0201" => "1/20W",
+            "0402" => "1/16W", 
+            "0603" => "1/10W",
+            "0805" => "1/8W",
+            "1206" => "1/4W",
+            "1210" => "1/2W",
+            "1218" => "1W",
+            "2010" => "3/4W",
+            "2512" => "1W",
+            _ => "1/10W",   // Default
+        }
+    }
 }
