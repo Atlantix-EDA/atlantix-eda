@@ -8,6 +8,7 @@ extern crate bevy_ecs;
 pub mod kicad_symbol;
 pub mod kicad_footprint;
 pub mod ecs;
+pub mod gui;
 
 use self::num_traits::Pow;
 use crate::kicad_symbol::{KicadSymbol, KicadSymbolLib};

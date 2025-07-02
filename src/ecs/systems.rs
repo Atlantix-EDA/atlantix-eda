@@ -108,14 +108,14 @@ pub fn generate_manufacturer_parts(
 pub fn format_outputs(
     query: Query<(&ResistorValue, &Package, &Description, &PartNumber, &ManufacturerParts)>,
     config: Res<GeneratorConfig>,
-    mut commands: Commands,
+    _commands: Commands,
 ) {
     for (value, package, description, part_number, mfr_parts) in &query {
         for format in &config.output_formats {
             match format {
                 OutputFormat::KicadSymbols => {
                     // Generate KiCad symbol with manufacturer fields
-                    let symbol = generate_kicad_symbol_with_mfrs(
+                    let _symbol = generate_kicad_symbol_with_mfrs(
                         &part_number.0,
                         &value.formatted,
                         &format!("Atlantix_Resistors:R_{}_{}", package.imperial, package.metric),
@@ -127,7 +127,7 @@ pub fn format_outputs(
                 OutputFormat::Altium => {
                     // Generate Altium CSV line
                     if let Some(first_mfr) = mfr_parts.0.first() {
-                        let csv_line = format!(
+                        let _csv_line = format!(
                             "{},{},{},{},{},{},{},Atlantix_R.SchLib,Res1,Atlantix_R.PcbLib,RES{},Atlantix EDA,=Description",
                             part_number.0,
                             description.0,
@@ -191,7 +191,7 @@ fn generate_vishay_mpn(ohms: &f64, package: &str) -> String {
     format!("CRCW{}{:04.0}FKEA", package, ohms)
 }
 
-fn generate_vishay_digikey_pn(formatted: &str, package: &str) -> String {
+fn generate_vishay_digikey_pn(formatted: &str, _package: &str) -> String {
     format!("541-{}CT-ND", formatted)
 }
 
@@ -269,10 +269,10 @@ fn format_koa_resistance(ohms: f64) -> String {
 
 fn generate_kicad_symbol_with_mfrs(
     name: &str,
-    value: &str,
-    footprint: &str,
-    description: &str,
-    manufacturers: &[ManufacturerPart],
+    _value: &str,
+    _footprint: &str,
+    _description: &str,
+    _manufacturers: &[ManufacturerPart],
 ) -> String {
     // Simplified - would generate full KiCad symbol with manufacturer fields
     format!("(symbol \"{}\" ...)", name)

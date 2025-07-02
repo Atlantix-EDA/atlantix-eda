@@ -12,12 +12,23 @@ fs_extra = "1.2.0"
 chrono = "0.4"
 clap = { version = "4.0", features = ["derive"] }
 bevy_ecs = "0.14"
+eframe = "0.29"
+egui = "0.29"
+egui_extras = "0.29"
+egui_dock = "0.14"
+egui-file-dialog = "0.7"
+# egui_logger = "0.5"  # Temporarily disabled due to version conflict
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
 
 [lib]
 name = "component"
 
 [[bin]]
-name = "gen_resistor"
-path = "examples/gen_resistor.rs"
+name = "atlantix_eda_gui"
+path = "src/bin/gui.rs"
 
