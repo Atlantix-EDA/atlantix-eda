@@ -28,7 +28,4 @@ tracing-subscriber = "0.3"
 [lib]
 name = "component"
 
-[[bin]]
-name = "atlantix_eda_gui"
-path = "src/bin/gui.rs"
 
