@@ -1,31 +1,24 @@
-[package]
-name    = "atlantix_eda" # the name of the package
-version = "0.1.1"    # the current version, obeying semver
-edition = "2021"     # use 2021 edition (2024 edition is not yet stable)
+[workspace]
+resolver = "2"
+members = [
+    "crates/atlantix-core",
+    "crates/kiparse",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
 authors = ["James <fpga@atlantixeng.com>"]
-description = "Programmatically generated libraries for PCB Design."
-repository = "https://github.com/saturn77/atlantix-eda.git"
+license = "MIT"
+repository = "https://github.com/Atlantix-EDA/atlantix-eda"
 
-[dependencies]
-num-traits = "0.2.14"
-fs_extra = "1.2.0"
-chrono = "0.4"
-clap = { version = "4.0", features = ["derive"] }
-bevy_ecs = "0.14"
-eframe = "0.29"
-egui = "0.29"
-egui_extras = "0.29"
-egui_dock = "0.14"
-egui-file-dialog = "0.7"
-# egui_logger = "0.5"  # Temporarily disabled due to version conflict
-log = "0.4"
-env_logger = "0.11"
+[workspace.dependencies]
+# Core dependencies
 serde = { version = "1.0", features = ["derive"] }
-tracing = "0.1"
-tracing-subscriber = "0.3"
+serde_json = "1.0"
+chrono = "0.4"
+regex = "1.10"
 
-
-[lib]
-name = "component"
-
-
+# Workspace crates
+kiparse = { path = "crates/kiparse" }
+atlantix-core = { path = "crates/atlantix-core" }
