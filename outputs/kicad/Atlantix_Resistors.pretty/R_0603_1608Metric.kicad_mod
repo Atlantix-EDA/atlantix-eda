@@ -1,4 +1,4 @@
-(module R_0603_1608Metric (layer F.Cu) (tedit 20250627205330)
+(module R_0603_1608Metric (layer F.Cu) (tedit 20251210194303)
   (descr "Resistor SMD 0603 (1608Metric), square (rectangular) end terminal, IPC_7351 nominal")
   (tags resistor)
   (attr smd)

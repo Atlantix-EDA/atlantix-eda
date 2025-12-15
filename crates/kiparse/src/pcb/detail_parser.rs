@@ -1,8 +1,10 @@
 //! Second stage detail parser for PCB elements
-//! 
+//!
 //! This module provides the second stage of the two-stage parsing process.
 //! After the simple parser extracts layers, this parser extracts detailed
 //! information about specific PCB elements using optimized regex patterns.
+
+#![allow(dead_code)]
 
 use regex::Regex;
 use once_cell::sync::Lazy;
@@ -141,6 +143,9 @@ impl<'a> DetailParser<'a> {
         static FOOTPRINT_INFO_REGEX: Lazy<Regex> = Lazy::new(|| {
             Regex::new(r#"(?s)\(footprint\s+"([^"]+)".*?\(at\s+([\d.-]+)\s+([\d.-]+)(?:\s+([\d.-]+))?\).*?\(property\s+"Reference"\s+"([^"]+)""#).unwrap()
         });
+        static LAYER_REGEX: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r#"\(footprint\s+"[^"]+"\s+\(layer\s+"([^"]+)"\)"#).unwrap()
+        });
 
         // Find footprint block boundaries
         let starts: Vec<usize> = FOOTPRINT_START.find_iter(self.content)
@@ -166,8 +171,9 @@ impl<'a> DetailParser<'a> {
                 // Extract Description property from this block
                 let description = DESCRIPTION_REGEX.captures(block).map(|c| c[1].to_string());
 
-                // Determine layer from footprint context
-                let layer = self.extract_component_layer(&footprint, x, y)
+                // Extract layer from footprint definition (e.g., (footprint "..." (layer "B.Cu")))
+                let layer = LAYER_REGEX.captures(block)
+                    .map(|c| c[1].to_string())
                     .unwrap_or_else(|| "F.Cu".to_string());
 
                 components.push(ComponentInfo {
@@ -194,7 +200,13 @@ impl<'a> DetailParser<'a> {
             let x: f64 = cap[2].parse().unwrap_or(0.0);
             let y: f64 = cap[3].parse().unwrap_or(0.0);
             let rotation: f64 = cap.get(4).map_or(0.0, |m| m.as_str().parse().unwrap_or(0.0));
-            let layer = self.extract_component_layer(&footprint, x, y)
+
+            // Try to find layer for this component by searching near the match
+            let match_start = cap.get(0).unwrap().start();
+            let search_end = (match_start + 500).min(self.content.len());
+            let search_slice = &self.content[match_start..search_end];
+            let layer = LAYER_REGEX.captures(search_slice)
+                .map(|c| c[1].to_string())
                 .unwrap_or_else(|| "F.Cu".to_string());
 
             components.push(ComponentInfo {
