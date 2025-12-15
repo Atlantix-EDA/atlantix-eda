@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/atlantix-core",
     "crates/kiparse",
+    "crates/aeda-cli",
 ]
 
 [workspace.package]
