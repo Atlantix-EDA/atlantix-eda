@@ -53,6 +53,23 @@ enum Commands {
 
     /// Show current configuration and paths
     Config,
+
+    /// Verify reference designators are in sync between a .kicad_pcb and the
+    /// schematic. Accepts either a .kicad_sch (auto-exports a fresh netlist
+    /// via kicad-cli, never touches your project files) or a pre-exported
+    /// .net file. Default kicad-cli is the flatpak org.kicad.KiCad (10.0.1);
+    /// override with KICAD_CLI env var (whitespace-split argv).
+    Sync {
+        /// Path to the .kicad_pcb file
+        pcb: PathBuf,
+
+        /// Path to either a .kicad_sch (auto-exported) or a .net (used as-is)
+        schematic_or_netlist: PathBuf,
+
+        /// Emit JSON instead of a human-readable report
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -145,6 +162,9 @@ fn main() {
         }
         Commands::Config => {
             commands::config::run(&data_dir)
+        }
+        Commands::Sync { pcb, schematic_or_netlist, json } => {
+            commands::sync::run(&pcb, &schematic_or_netlist, json)
         }
     };
 
